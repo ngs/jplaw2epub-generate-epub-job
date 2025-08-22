@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mv:*)",
+      "Bash(rmdir:*)",
+      "Bash(git add:*)",
+      "Bash(golangci-lint run:*)",
+      "Bash(go doc:*)",
+      "Bash(goimports:*)",
+      "Bash(go install:*)",
+      "Bash(grep:*)",
+      "Bash(gofmt:*)",
+      "Bash(mkdir:*)",
+      "Bash(rm:*)",
+      "Bash(make fmt:*)",
+      "Bash(curl:*)",
+      "Bash(go build:*)",
+      "Bash(docker build:*)",
+      "Bash(docker logs:*)",
+      "Bash(docker stop:*)",
+      "Bash(docker rm:*)",
+      "Bash(docker run:*)",
+      "Bash(go list:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(docker compose:*)",
+      "Bash(go run:*)",
+      "Bash(chmod:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

@@ -1,0 +1,73 @@
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  enable:
+    - gofmt
+    - goimports
+    - govet
+    - errcheck
+    - staticcheck
+    - unused
+    - gosimple
+    - ineffassign
+    - typecheck
+    - gosec
+    - gocritic
+    - revive
+    - misspell
+    - unparam
+    - prealloc
+    - unconvert
+    - nakedret
+    - noctx
+    - gochecknoinits
+    - gochecknoglobals
+    - exhaustive
+    - godot
+    - nestif
+    - copyloopvar
+
+linters-settings:
+  gofmt:
+    simplify: true
+  goimports:
+    local-prefixes: go.ngs.io/jplaw2epub-web-api
+  govet:
+    enable:
+      - shadow
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - experimental
+      - opinionated
+      - performance
+      - style
+  revive:
+    confidence: 0.8
+  misspell:
+    locale: US
+  prealloc:
+    simple: true
+    range-loops: true
+    for-loops: true
+  godot:
+    scope: all
+    capital: true
+  nestif:
+    min-complexity: 4
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - gosec
+        - gochecknoglobals
+    - linters:
+        - gosec
+      text: "G104:"
+      path: main\.go

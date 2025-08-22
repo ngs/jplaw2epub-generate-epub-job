@@ -1,0 +1,61 @@
+name: Deploy Cloud Function
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: ${{ secrets.PROJECT_ID }}
+  REGION: asia-northeast1
+  FUNCTION_NAME: generate-epub
+  EPUB_BUCKET_NAME: ${{ secrets.EPUB_BUCKET_NAME || 'epub-storage' }}
+
+jobs:
+  deploy:
+    name: Deploy to Cloud Functions
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy Cloud Function
+        run: |
+          gcloud functions deploy ${FUNCTION_NAME} \
+            --gen2 \
+            --runtime=go122 \
+            --region=${REGION} \
+            --source=. \
+            --entry-point=GenerateEpub \
+            --trigger-http \
+            --allow-unauthenticated \
+            --timeout=540s \
+            --memory=1GB \
+            --max-instances=5 \
+            --set-env-vars="EPUB_BUCKET_NAME=${EPUB_BUCKET_NAME}" \
+            --project=${PROJECT_ID}
+
+      - name: Get Function URL
+        run: |
+          FUNCTION_URL=$(gcloud functions describe ${FUNCTION_NAME} \
+            --region=${REGION} \
+            --format='value(url)' \
+            --project=${PROJECT_ID})
+          
+          echo "Function deployed to: ${FUNCTION_URL}"
+          echo ""
+          echo "Add this URL to your main API environment:"
+          echo "EPUB_FUNCTION_URL=${FUNCTION_URL}"
