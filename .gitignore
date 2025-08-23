@@ -36,7 +36,5 @@ Thumbs.db
 *.tmp
 *.log
 
-# Go sum
-go.sum
 
 /jplaw2epub-generate-epub-job
