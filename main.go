@@ -1,88 +1,84 @@
-package generateepub
+package main
 
 import (
 	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"strings"
 	"time"
 
 	"cloud.google.com/go/storage"
-	"github.com/GoogleCloudPlatform/functions-framework-go/functions"
 	jplaw "go.ngs.io/jplaw-api-v2"
 	"go.ngs.io/jplaw2epub"
 )
 
-func init() {
-	functions.HTTP("GenerateEpub", GenerateEpub)
-}
+func main() {
+	var (
+		revisionID = flag.String("revision-id", "", "Law revision ID to convert")
+		version    = flag.String("version", "v1.0.0", "App version for storage path")
+		bucketName = flag.String("bucket", "", "GCS bucket name (defaults to EPUB_BUCKET_NAME env var)")
+		verbose    = flag.Bool("verbose", false, "Enable verbose logging")
+	)
+	flag.Parse()
 
-// GenerateEpub handles EPUB generation requests
-func GenerateEpub(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		ID      string `json:"id"`
-		Version string `json:"version"`
+	if *revisionID == "" {
+		log.Fatal("Error: --revision-id is required")
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("Failed to decode request: %v", err)
-		http.Error(w, "Invalid request", http.StatusBadRequest)
-		return
+	if *bucketName == "" {
+		*bucketName = os.Getenv("EPUB_BUCKET_NAME")
+		if *bucketName == "" {
+			*bucketName = "epub-storage"
+		}
+	}
+
+	if *verbose {
+		log.Printf("Starting EPUB generation for revision ID: %s", *revisionID)
+		log.Printf("Version: %s", *version)
+		log.Printf("Bucket: %s", *bucketName)
 	}
 
 	ctx := context.Background()
-	bucketName := os.Getenv("EPUB_BUCKET_NAME")
-	if bucketName == "" {
-		bucketName = "epub-storage"
+
+	// Update status to PROCESSING.
+	statusPath := fmt.Sprintf("%s/%s.status", *version, *revisionID)
+	if err := updateStatus(ctx, *bucketName, statusPath, "PROCESSING", ""); err != nil {
+		log.Printf("Warning: Failed to update status to PROCESSING: %v", err)
 	}
 
-	statusPath := fmt.Sprintf("%s/%s.status", req.Version, req.ID)
-
-	// Update status to PROCESSING
-	if err := updateStatus(ctx, bucketName, statusPath, "PROCESSING", ""); err != nil {
-		log.Printf("Failed to update status to PROCESSING: %v", err)
-	}
-
-	// Generate EPUB
-	epubData, err := generateEPUBFromID(ctx, req.ID)
+	// Generate EPUB.
+	epubData, err := generateEPUBFromID(ctx, *revisionID)
 	if err != nil {
-		log.Printf("Failed to generate EPUB for %s: %v", req.ID, err)
-		// Update status to FAILED
-		if updateErr := updateStatus(ctx, bucketName, statusPath, "FAILED", err.Error()); updateErr != nil {
-			log.Printf("Failed to update status to FAILED: %v", updateErr)
+		log.Printf("Error: Failed to generate EPUB for %s: %v", *revisionID, err)
+		// Update status to FAILED.
+		if updateErr := updateStatus(ctx, *bucketName, statusPath, "FAILED", err.Error()); updateErr != nil {
+			log.Printf("Warning: Failed to update status to FAILED: %v", updateErr)
 		}
-		http.Error(w, "Failed to generate EPUB", http.StatusInternalServerError)
-		return
+		os.Exit(1)
 	}
 
-	// Save EPUB to Cloud Storage
-	epubPath := fmt.Sprintf("%s/%s.epub", req.Version, req.ID)
-	if err := uploadEPUB(ctx, bucketName, epubPath, epubData); err != nil {
-		log.Printf("Failed to upload EPUB: %v", err)
-		if updateErr := updateStatus(ctx, bucketName, statusPath, "FAILED", err.Error()); updateErr != nil {
-			log.Printf("Failed to update status to FAILED: %v", updateErr)
+	// Save EPUB to Cloud Storage.
+	epubPath := fmt.Sprintf("%s/%s.epub", *version, *revisionID)
+	if err := uploadEPUB(ctx, *bucketName, epubPath, epubData); err != nil {
+		log.Printf("Error: Failed to upload EPUB: %v", err)
+		if updateErr := updateStatus(ctx, *bucketName, statusPath, "FAILED", err.Error()); updateErr != nil {
+			log.Printf("Warning: Failed to update status to FAILED: %v", updateErr)
 		}
-		http.Error(w, "Failed to save EPUB", http.StatusInternalServerError)
-		return
+		os.Exit(1)
 	}
 
-	// Delete status file (no longer needed)
-	if err := deleteObject(ctx, bucketName, statusPath); err != nil {
-		log.Printf("Failed to delete status file: %v", err)
-		// This is not critical, continue
+	// Delete status file (no longer needed).
+	if err := deleteObject(ctx, *bucketName, statusPath); err != nil {
+		log.Printf("Warning: Failed to delete status file: %v", err)
+		// This is not critical, continue.
 	}
 
-	log.Printf("Successfully generated EPUB for %s", req.ID)
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{
-		"status": "success",
-		"id":     req.ID,
-	})
+	log.Printf("Successfully generated EPUB for %s at %s", *revisionID, epubPath)
 }
 
 func updateStatus(ctx context.Context, bucketName, path, status, errorMsg string) error {
@@ -103,6 +99,7 @@ func updateStatus(ctx context.Context, bucketName, path, status, errorMsg string
 	}
 
 	w := obj.NewWriter(ctx)
+	w.ContentType = "application/json"
 	if err := json.NewEncoder(w).Encode(statusData); err != nil {
 		return err
 	}
@@ -160,7 +157,7 @@ func generateEPUBFromID(ctx context.Context, lawIdOrNumOrRevisionId string) ([]b
 	xmlReader := bytes.NewReader(xmlContent)
 	options := &jplaw2epub.EPUBOptions{}
 
-	// Check if this is a revision ID (has 3 components separated by _)
+	// Check if this is a revision ID (has 3 components separated by _).
 	idComponents := strings.Split(lawIdOrNumOrRevisionId, "_")
 	if len(idComponents) == 3 {
 		options.RevisionID = lawIdOrNumOrRevisionId

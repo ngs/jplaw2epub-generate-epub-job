@@ -1,16 +1,19 @@
-# jplaw2epub-generate-epub-function
+# jplaw2epub-generate-epub-job
 
-Cloud Function for generating EPUB files from Japanese law data asynchronously.
+Cloud Run Job for generating EPUB files from Japanese law data asynchronously.
 
 ## Overview
 
-This Cloud Function processes EPUB generation requests from the main [jplaw2epub-web-api](https://github.com/ngs/jplaw2epub-web-api) service. It handles the heavy EPUB generation process separately to avoid timeout issues.
+This Cloud Run Job processes EPUB generation requests from the main [jplaw2epub-web-api](https://github.com/ngs/jplaw2epub-web-api) service. It runs as a command-line application to handle heavy EPUB generation processes asynchronously without timeout constraints.
 
 ## Architecture
 
 ```
-Main API → Cloud Function → Cloud Storage
-             (this repo)      (EPUB files)
+Main API → Cloud Run Jobs API → Cloud Run Job (Container)
+                                    (this repo)
+                                         ↓
+                                  Cloud Storage
+                                   (EPUB files)
 ```
 
 ## Setup
@@ -18,14 +21,21 @@ Main API → Cloud Function → Cloud Storage
 ### Prerequisites
 
 - Google Cloud Project with billing enabled
-- Cloud Functions API enabled
+- Cloud Run API enabled
 - Cloud Storage API enabled
+- Container Registry or Artifact Registry enabled
 - Service account with appropriate permissions
+
+### Command-line Arguments
+
+- `--revision-id`: Law revision ID to convert (required)
+- `--version`: App version for storage path (default: `v1.0.0`)
+- `--bucket`: GCS bucket name (defaults to `EPUB_BUCKET_NAME` env var)
+- `--verbose`: Enable verbose logging
 
 ### Environment Variables
 
 - `EPUB_BUCKET_NAME`: Cloud Storage bucket name (default: `epub-storage`)
-- `PROJECT_ID`: GCP Project ID
 
 ### Local Development
 
@@ -37,97 +47,81 @@ go mod download
 2. Run locally:
 ```bash
 export EPUB_BUCKET_NAME=epub-storage
-go run main.go
+go run main.go --revision-id=335M50000002060_20250601_507M60000002046
 ```
 
 ### Deployment
 
-#### Option 1: GitHub Actions (Recommended)
+#### Option 1: Using the Deploy Script
 
-1. Set up GitHub Secrets:
-   - `PROJECT_ID`: Your GCP project ID
-   - `WIF_PROVIDER`: Workload Identity Federation provider
-   - `WIF_SERVICE_ACCOUNT`: Service account for deployment
-   - `EPUB_BUCKET_NAME`: Storage bucket name (optional)
+```bash
+./deploy-job.sh
+```
 
-2. Push to main branch or trigger manually from Actions tab
+This script will:
+1. Build the Docker image
+2. Push to Container Registry
+3. Create/update the Cloud Run Job
 
 #### Option 2: Manual Deployment
 
 ```bash
-gcloud functions deploy generate-epub \
-  --gen2 \
-  --runtime=go122 \
+# Build and push Docker image
+docker build -t gcr.io/YOUR_PROJECT_ID/epub-generator .
+docker push gcr.io/YOUR_PROJECT_ID/epub-generator
+
+# Create Cloud Run Job
+gcloud run jobs create epub-generator \
+  --image=gcr.io/YOUR_PROJECT_ID/epub-generator \
   --region=asia-northeast1 \
-  --source=. \
-  --entry-point=GenerateEpub \
-  --trigger-http \
-  --allow-unauthenticated \
-  --timeout=540s \
-  --memory=1GB \
-  --max-instances=5 \
+  --parallelism=5 \
+  --task-timeout=3600 \
+  --max-retries=2 \
+  --memory=1Gi \
+  --cpu=2 \
   --set-env-vars="EPUB_BUCKET_NAME=epub-storage" \
   --project=YOUR_PROJECT_ID
 ```
 
 ## Storage Setup
 
-Create and configure the storage bucket:
+Run the setup script to create and configure the storage bucket:
 
 ```bash
-# Create bucket
-gsutil mb -l asia-northeast1 gs://epub-storage
-
-# Set lifecycle (auto-delete after 30 days)
-cat > lifecycle.json <<EOF
-{
-  "lifecycle": {
-    "rule": [{
-      "action": {"type": "Delete"},
-      "condition": {"age": 30}
-    }]
-  }
-}
-EOF
-gsutil lifecycle set lifecycle.json gs://epub-storage
-
-# Set CORS
-cat > cors.json <<EOF
-[{
-  "origin": ["*"],
-  "method": ["GET", "HEAD"],
-  "responseHeader": ["Content-Type"],
-  "maxAgeSeconds": 3600
-}]
-EOF
-gsutil cors set cors.json gs://epub-storage
+./scripts/setup-storage.sh
 ```
 
-## API
+This script will:
+- Create a Cloud Storage bucket for EPUB files
+- Set lifecycle rules (auto-delete after 30 days)
+- Configure CORS settings
 
-### Request
+## Usage
 
-```json
-POST /
-{
-  "id": "335M50000002060_20250601_507M60000002046",
-  "version": "v1.0.0"
-}
+### Execute Job Manually
+
+```bash
+gcloud run jobs execute epub-generator \
+  --region=asia-northeast1 \
+  --args="--revision-id=335M50000002060_20250601_507M60000002046"
 ```
 
-### Response
+### Programmatic Execution (from Main API)
 
-Success:
-```json
-{
-  "status": "success",
-  "id": "335M50000002060_20250601_507M60000002046"
-}
-```
+The main API triggers the job using Cloud Run Jobs API:
 
-Error:
-```
-HTTP 500 Internal Server Error
+```go
+jobsClient.RunJob(&runpb.RunJobRequest{
+    Name: "projects/PROJECT/locations/REGION/jobs/epub-generator",
+    Overrides: &runpb.RunJobRequest_Overrides{
+        ContainerOverrides: [{
+            Args: []string{
+                "--revision-id", revisionID,
+                "--version", version,
+            },
+        }],
+    },
+})
 ```
 
 ## File Structure in Cloud Storage
@@ -151,27 +145,34 @@ epub-storage/
 
 ## Performance
 
-- Timeout: 9 minutes (540 seconds)
+- Timeout: 1 hour (3600 seconds)
 - Memory: 1GB
-- Max instances: 5
+- CPU: 2 cores
+- Parallelism: 5 concurrent executions
+- Max retries: 2
 - Expected processing time: 30-60 seconds per EPUB
 
 ## Cost Estimation
 
-For 1000 EPUB generations per month:
-- Cloud Functions: ~$0.50
+For 1000 EPUB generations per month (assuming 1 minute per job):
+- Cloud Run Jobs: ~$0.40 (CPU: $0.32 + Memory: $0.08)
 - Cloud Storage: ~$0.07
-- Total: ~$0.57/month
+- Total: ~$0.47/month
 
 ## Monitoring
 
-View logs:
+View job executions:
 ```bash
-gcloud functions logs read generate-epub --limit=50
+gcloud run jobs executions list --job=epub-generator --region=asia-northeast1
+```
+
+View logs for a specific execution:
+```bash
+gcloud run jobs executions logs EXECUTION_ID --job=epub-generator --region=asia-northeast1
 ```
 
 View metrics in Cloud Console:
-- [Cloud Functions Console](https://console.cloud.google.com/functions)
+- [Cloud Run Console](https://console.cloud.google.com/run)
 - [Cloud Storage Console](https://console.cloud.google.com/storage)
 
 ## License

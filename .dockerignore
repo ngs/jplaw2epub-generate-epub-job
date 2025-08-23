@@ -1,0 +1,36 @@
+# Git files
+.git
+.gitignore
+
+# Go build cache
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# IDE files
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Documentation
+*.md
+LICENSE
+
+# Scripts
+*.sh
+
+# GitHub
+.github/
+
+# Local environment
+.env
+.env.local

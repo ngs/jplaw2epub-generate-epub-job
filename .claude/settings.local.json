@@ -24,7 +24,8 @@
       "WebFetch(domain:github.com)",
       "Bash(docker compose:*)",
       "Bash(go run:*)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "Bash(./scripts/setup-storage.sh:*)"
     ],
     "deny": [],
     "ask": []
