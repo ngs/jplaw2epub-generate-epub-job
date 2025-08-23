@@ -25,7 +25,8 @@
       "Bash(docker compose:*)",
       "Bash(go run:*)",
       "Bash(chmod:*)",
-      "Bash(./scripts/setup-storage.sh:*)"
+      "Bash(./scripts/setup-storage.sh:*)",
+      "Bash(go test:*)"
     ],
     "deny": [],
     "ask": []

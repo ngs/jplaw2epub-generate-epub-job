@@ -134,7 +134,7 @@ func deleteObject(ctx context.Context, bucketName, path string) error {
 	return obj.Delete(ctx)
 }
 
-func generateEPUBFromID(ctx context.Context, lawIdOrNumOrRevisionId string) ([]byte, error) {
+func generateEPUBFromID(_ context.Context, lawIdOrNumOrRevisionId string) ([]byte, error) {
 	log.Printf("Fetching law data for ID: %s", lawIdOrNumOrRevisionId)
 
 	client := jplaw.NewClient()

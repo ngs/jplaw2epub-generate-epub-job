@@ -38,3 +38,5 @@ Thumbs.db
 
 # Go sum
 go.sum
+
+/jplaw2epub-generate-epub-job
