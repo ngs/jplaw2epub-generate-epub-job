@@ -26,7 +26,9 @@
       "Bash(go run:*)",
       "Bash(chmod:*)",
       "Bash(./scripts/setup-storage.sh:*)",
-      "Bash(go test:*)"
+      "Bash(go test:*)",
+      "Bash(go mod:*)",
+      "Bash(go get:*)"
     ],
     "deny": [],
     "ask": []
