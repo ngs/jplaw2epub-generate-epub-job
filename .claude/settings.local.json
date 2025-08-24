@@ -29,7 +29,8 @@
       "Bash(go test:*)",
       "Bash(go mod:*)",
       "Bash(go get:*)",
-      "Bash(go:*)"
+      "Bash(go:*)",
+      "Bash(/Users/ngs/src/jplaw2epub-generate-epub-job/check-wif.sh:*)"
     ],
     "deny": [],
     "ask": []
