@@ -28,7 +28,8 @@
       "Bash(./scripts/setup-storage.sh:*)",
       "Bash(go test:*)",
       "Bash(go mod:*)",
-      "Bash(go get:*)"
+      "Bash(go get:*)",
+      "Bash(go:*)"
     ],
     "deny": [],
     "ask": []

@@ -36,6 +36,15 @@ jobs:
       run: |
         gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
 
+    - name: Create Artifact Registry Repository (if not exists)
+      run: |
+        gcloud artifacts repositories describe ${{ env.JOB_NAME }} \
+          --location=${{ env.REGION }} || \
+        gcloud artifacts repositories create ${{ env.JOB_NAME }} \
+          --repository-format=docker \
+          --location=${{ env.REGION }} \
+          --description="Docker repository for EPUB generator"
+
     - name: Build and Push Docker image
       run: |
         IMAGE_NAME="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.JOB_NAME }}/${{ env.JOB_NAME }}:${{ github.sha }}"
