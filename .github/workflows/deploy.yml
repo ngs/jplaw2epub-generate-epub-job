@@ -109,7 +109,7 @@ jobs:
           gcloud builds submit \
             --tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.JOB_NAME }}:${{ github.sha }} \
             --region ${{ env.REGION }}
-          
+
           gcloud run jobs deploy ${{ env.JOB_NAME }} \
             --image ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.JOB_NAME }}:${{ github.sha }} \
             --region ${{ env.REGION }} \
@@ -129,4 +129,4 @@ jobs:
           gcloud run jobs execute ${{ env.JOB_NAME }} \
             --region ${{ env.REGION }} \
             --wait \
-            --args="--test" || echo "Test execution completed with status: $?"
+            --args="--revision-id,406CO0000000342_20050401_417CO0000000140,--version,ci-test" || echo "Test execution completed with status: $?"

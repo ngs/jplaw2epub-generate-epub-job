@@ -18,6 +18,13 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		log.Printf("Error: %v", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	var (
 		revisionID = flag.String("revision-id", "", "Law revision ID to convert")
 		version    = flag.String("version", "v1.0.0", "App version for storage path")
@@ -27,7 +34,7 @@ func main() {
 	flag.Parse()
 
 	if *revisionID == "" {
-		log.Fatal("Error: --revision-id is required")
+		return fmt.Errorf("--revision-id is required")
 	}
 
 	if *bucketName == "" {
@@ -51,7 +58,7 @@ func main() {
 		log.Printf("Warning: Failed to update status to PROCESSING: %v", err)
 	}
 
-	// Ensure status file is deleted on exit (success or failure)
+	// Ensure status file is deleted on exit (success or failure).
 	defer func() {
 		if err := deleteObject(ctx, *bucketName, statusPath); err != nil {
 			log.Printf("Warning: Failed to delete status file on cleanup: %v", err)
@@ -61,25 +68,24 @@ func main() {
 	// Generate EPUB.
 	epubData, err := generateEPUBFromID(ctx, *revisionID)
 	if err != nil {
-		log.Printf("Error: Failed to generate EPUB for %s: %v", *revisionID, err)
 		// Update status to FAILED.
 		if updateErr := updateStatus(ctx, *bucketName, statusPath, "FAILED", err.Error()); updateErr != nil {
 			log.Printf("Warning: Failed to update status to FAILED: %v", updateErr)
 		}
-		os.Exit(1)
+		return fmt.Errorf("failed to generate EPUB for %s: %w", *revisionID, err)
 	}
 
 	// Save EPUB to Cloud Storage.
 	epubPath := fmt.Sprintf("%s/%s.epub", *version, *revisionID)
 	if err := uploadEPUB(ctx, *bucketName, epubPath, epubData); err != nil {
-		log.Printf("Error: Failed to upload EPUB: %v", err)
 		if updateErr := updateStatus(ctx, *bucketName, statusPath, "FAILED", err.Error()); updateErr != nil {
 			log.Printf("Warning: Failed to update status to FAILED: %v", updateErr)
 		}
-		os.Exit(1)
+		return fmt.Errorf("failed to upload EPUB: %w", err)
 	}
 
 	log.Printf("Successfully generated EPUB for %s at %s", *revisionID, epubPath)
+	return nil
 }
 
 func updateStatus(ctx context.Context, bucketName, path, status, errorMsg string) error {
