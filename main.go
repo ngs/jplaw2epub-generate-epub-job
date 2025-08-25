@@ -51,6 +51,13 @@ func main() {
 		log.Printf("Warning: Failed to update status to PROCESSING: %v", err)
 	}
 
+	// Ensure status file is deleted on exit (success or failure)
+	defer func() {
+		if err := deleteObject(ctx, *bucketName, statusPath); err != nil {
+			log.Printf("Warning: Failed to delete status file on cleanup: %v", err)
+		}
+	}()
+
 	// Generate EPUB.
 	epubData, err := generateEPUBFromID(ctx, *revisionID)
 	if err != nil {
@@ -70,12 +77,6 @@ func main() {
 			log.Printf("Warning: Failed to update status to FAILED: %v", updateErr)
 		}
 		os.Exit(1)
-	}
-
-	// Delete status file (no longer needed).
-	if err := deleteObject(ctx, *bucketName, statusPath); err != nil {
-		log.Printf("Warning: Failed to delete status file: %v", err)
-		// This is not critical, continue.
 	}
 
 	log.Printf("Successfully generated EPUB for %s at %s", *revisionID, epubPath)
